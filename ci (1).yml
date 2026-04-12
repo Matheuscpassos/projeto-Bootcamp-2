@@ -1,0 +1,53 @@
+name: CI — Lint e Testes
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  lint:
+    name: Verificar erros (flake8)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Baixar repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Instalar flake8 e nbqa
+        run: pip install flake8 nbqa
+
+      - name: Rodar lint no notebook
+        run: |
+          nbqa flake8 projeto.ipynb \
+            --max-line-length=100 \
+            --ignore=E302,E305,W503
+
+  testes:
+    name: Rodar testes (pytest)
+    runs-on: ubuntu-latest
+    needs: lint
+
+    steps:
+      - name: Baixar repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Instalar dependências
+        run: pip install pytest nbmake
+
+      - name: Rodar testes unitários
+        run: pytest testes/test_remedios.py -v
+
+      - name: Executar notebook completo (smoke test)
+        run: pytest --nbmake projeto.ipynb
