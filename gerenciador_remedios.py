@@ -114,7 +114,7 @@ class App(ctk.CTk):
     # ── Header ────────────────────────────────────────────────────────────────
     def _build_header(self):
         header = ctk.CTkFrame(self, corner_radius=0, height=60,
-                              fg_color=("#1a5fa8", "#0d3d6e"))
+                            fg_color=("#1a5fa8", "#0d3d6e"))
         header.grid(row=0, column=0, sticky="ew")
         header.grid_columnconfigure(0, weight=1)
 
