@@ -5,6 +5,8 @@ Requer: pip install customtkinter
 
 import datetime
 import os
+import re
+import requests
 import customtkinter as ctk
 from tkinter import messagebox
 
@@ -13,11 +15,59 @@ ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
 
 ARQUIVO = "lista.txt"
+VIACEP_URL = "https://viacep.com.br/ws/{cep}/json/"
 
 # ── Dados em memória ───────────────────────────────────────────────────────────
 remedios = []   # lista de nomes
 dosagens = []   # lista de dosagens formatadas
 horarios = []   # lista de listas de horários
+enderecos = []  # lista de strings de endereço da farmácia (via ViaCEP)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# INTEGRAÇÃO COM A API VIACEP
+# ══════════════════════════════════════════════════════════════════════════════
+
+def validar_cep(cep: str) -> bool:
+    """Verifica se o CEP tem o formato 8 dígitos (com ou sem hífen)."""
+    cep_limpo = re.sub(r"\D", "", cep)
+    return len(cep_limpo) == 8
+
+
+def buscar_endereco_cep(cep: str) -> tuple[bool, str]:
+    """
+    Consulta a API ViaCEP e retorna (ok, endereco_ou_erro).
+    endereco no formato: "Rua, Bairro - Cidade/UF"
+    """
+    cep_limpo = re.sub(r"\D", "", cep)
+
+    if not validar_cep(cep):
+        return False, "CEP deve conter 8 dígitos."
+
+    try:
+        resp = requests.get(VIACEP_URL.format(cep=cep_limpo), timeout=5)
+        resp.raise_for_status()
+        dados = resp.json()
+    except requests.RequestException:
+        return False, "Erro ao conectar à API ViaCEP. Verifique sua conexão."
+
+    if dados.get("erro"):
+        return False, "CEP não encontrado."
+
+    logradouro = dados.get("logradouro", "")
+    bairro = dados.get("bairro", "")
+    cidade = dados.get("localidade", "")
+    uf = dados.get("uf", "")
+
+    partes_endereco = ", ".join(p for p in (logradouro, bairro) if p)
+    cidade_uf = f"{cidade}/{uf}" if cidade and uf else (cidade or uf)
+
+    if partes_endereco and cidade_uf:
+        endereco = f"{partes_endereco} - {cidade_uf}"
+    else:
+        endereco = partes_endereco or cidade_uf or "Endereço não disponível"
+
+    return True, endereco
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -69,6 +119,7 @@ def salvar_tudo():
             f.write(f"Remédio: {remedios[i]}\n")
             f.write(f"Dosagem: {dosagens[i]}\n")
             f.write(f"Horários: {', '.join(horarios[i])}\n")
+            f.write(f"Endereço: {enderecos[i]}\n")
             f.write("\n")
 
 
@@ -78,6 +129,7 @@ def carregar_arquivo():
         return
     with open(ARQUIVO, encoding="utf-8") as f:
         bloco_nome = bloco_dose = bloco_hora = None
+        bloco_endereco = "—"
         for linha in f:
             linha = linha.strip()
             if linha.startswith("Remédio:"):
@@ -86,11 +138,15 @@ def carregar_arquivo():
                 bloco_dose = linha.replace("Dosagem:", "").strip()
             elif linha.startswith("Horários:"):
                 bloco_hora = [h.strip() for h in linha.replace("Horários:", "").split(",")]
+            elif linha.startswith("Endereço:"):
+                bloco_endereco = linha.replace("Endereço:", "").strip()
             elif linha == "" and bloco_nome:
                 remedios.append(bloco_nome)
                 dosagens.append(bloco_dose or "—")
                 horarios.append(bloco_hora or [])
+                enderecos.append(bloco_endereco or "—")
                 bloco_nome = bloco_dose = bloco_hora = None
+                bloco_endereco = "—"
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -102,7 +158,7 @@ class App(ctk.CTk):
         super().__init__()
         self.title("Gerenciador de Remédios")
         self.geometry("820x620")
-        self.minsize(700, 500)
+        self.minsize(360, 400)
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(1, weight=1)
 
@@ -127,11 +183,11 @@ class App(ctk.CTk):
 
     # ── Corpo principal (esquerda + direita) ──────────────────────────────────
     def _build_body(self):
-        body = ctk.CTkFrame(self, fg_color="transparent")
+        # Frame rolável: permite acessar todo o conteúdo mesmo em janelas pequenas
+        body = ctk.CTkScrollableFrame(self, fg_color="transparent")
         body.grid(row=1, column=0, sticky="nsew", padx=16, pady=12)
         body.grid_columnconfigure(0, weight=1)
         body.grid_columnconfigure(1, weight=1)
-        body.grid_rowconfigure(0, weight=1)
 
         self._build_form(body)
         self._build_lista(body)
@@ -171,7 +227,16 @@ class App(ctk.CTk):
                      ).grid(row=5, column=0, padx=16, sticky="w")
         self.entry_hora = ctk.CTkEntry(form, placeholder_text="Ex: 08:00, 14:00, 22:00",
                                        height=38, corner_radius=8)
-        self.entry_hora.grid(row=6, column=0, padx=16, pady=(2, 16), sticky="ew")
+        self.entry_hora.grid(row=6, column=0, padx=16, pady=(2, 10), sticky="ew")
+
+        # CEP da farmácia (integração ViaCEP)
+        ctk.CTkLabel(form, text="CEP da farmácia (opcional)",
+                     font=ctk.CTkFont(size=12),
+                     text_color=("gray40", "gray70")
+                     ).grid(row=7, column=0, padx=16, sticky="w")
+        self.entry_cep = ctk.CTkEntry(form, placeholder_text="Ex: 70040-010",
+                                       height=38, corner_radius=8)
+        self.entry_cep.grid(row=8, column=0, padx=16, pady=(2, 16), sticky="ew")
 
         # Botão adicionar
         self.btn_add = ctk.CTkButton(
@@ -180,25 +245,25 @@ class App(ctk.CTk):
             font=ctk.CTkFont(size=13, weight="bold"),
             command=self.adicionar_remedio
         )
-        self.btn_add.grid(row=7, column=0, padx=16, pady=(0, 16), sticky="ew")
+        self.btn_add.grid(row=9, column=0, padx=16, pady=(0, 16), sticky="ew")
 
         # Separador visual
         ctk.CTkLabel(form, text="─────────────────────",
                      text_color=("gray70", "gray40")
-                     ).grid(row=8, column=0)
+                     ).grid(row=10, column=0)
 
         # Seção excluir
         ctk.CTkLabel(form, text="Excluir remédio",
                      font=ctk.CTkFont(size=15, weight="bold")
-                     ).grid(row=9, column=0, pady=(8, 4), padx=16, sticky="w")
+                     ).grid(row=11, column=0, pady=(8, 4), padx=16, sticky="w")
 
         ctk.CTkLabel(form, text="Nome do remédio a excluir",
                      font=ctk.CTkFont(size=12),
                      text_color=("gray40", "gray70")
-                     ).grid(row=10, column=0, padx=16, sticky="w")
+                     ).grid(row=12, column=0, padx=16, sticky="w")
         self.entry_excluir = ctk.CTkEntry(form, placeholder_text="Ex: Paracetamol",
                                           height=38, corner_radius=8)
-        self.entry_excluir.grid(row=11, column=0, padx=16, pady=(2, 10), sticky="ew")
+        self.entry_excluir.grid(row=13, column=0, padx=16, pady=(2, 10), sticky="ew")
 
         self.btn_del = ctk.CTkButton(
             form, text="🗑  Excluir remédio",
@@ -208,7 +273,7 @@ class App(ctk.CTk):
             hover_color=("#a93226", "#7b241c"),
             command=self.excluir_remedio
         )
-        self.btn_del.grid(row=12, column=0, padx=16, pady=(0, 16), sticky="ew")
+        self.btn_del.grid(row=14, column=0, padx=16, pady=(0, 16), sticky="ew")
 
     # ── Lista de remédios (coluna direita) ────────────────────────────────────
     def _build_lista(self, parent):
@@ -230,8 +295,9 @@ class App(ctk.CTk):
                                       text_color=("gray40", "gray70"))
         self.lbl_count.grid(row=0, column=1, sticky="e")
 
-        # Área rolável
-        self.scroll = ctk.CTkScrollableFrame(col, corner_radius=12, label_text="")
+        # Área rolável (lista de remédios cadastrados)
+        self.scroll = ctk.CTkScrollableFrame(col, corner_radius=12, label_text="",
+                                              height=320)
         self.scroll.grid(row=1, column=0, sticky="nsew", pady=(8, 0))
         self.scroll.grid_columnconfigure(0, weight=1)
 
@@ -254,6 +320,7 @@ class App(ctk.CTk):
         nome  = self.entry_nome.get().strip()
         dose  = self.entry_dose.get().strip()
         horas = self.entry_hora.get().strip()
+        cep   = self.entry_cep.get().strip()
 
         # Validar nome
         ok, erro = validar_nome(nome)
@@ -285,20 +352,35 @@ class App(ctk.CTk):
             messagebox.showerror("Horário inválido", msg)
             return
 
+        # Validar e consultar CEP (opcional)
+        endereco = "—"
+        if cep:
+            self._status("Consultando endereço na API ViaCEP...")
+            self.update_idletasks()
+            ok, resultado_cep = buscar_endereco_cep(cep)
+            if not ok:
+                self._status(f"Erro: {resultado_cep}", erro=True)
+                messagebox.showerror("CEP inválido", resultado_cep)
+                return
+            endereco = resultado_cep
+
         # Salvar
         remedios.append(nome)
         dosagens.append(dose_fmt)
         horarios.append(lista_horas)
+        enderecos.append(endereco)
 
         with open(ARQUIVO, "a", encoding="utf-8") as f:
             f.write(f"Remédio: {nome}\n")
             f.write(f"Dosagem: {dose_fmt}\n")
-            f.write(f"Horários: {', '.join(lista_horas)}\n\n")
+            f.write(f"Horários: {', '.join(lista_horas)}\n")
+            f.write(f"Endereço: {endereco}\n\n")
 
         # Limpar campos
         self.entry_nome.delete(0, "end")
         self.entry_dose.delete(0, "end")
         self.entry_hora.delete(0, "end")
+        self.entry_cep.delete(0, "end")
 
         self._status(f'"{nome}" adicionado com sucesso.')
         self.atualizar_lista()
@@ -328,6 +410,7 @@ class App(ctk.CTk):
         del remedios[idx]
         del dosagens[idx]
         del horarios[idx]
+        del enderecos[idx]
 
         salvar_tudo()
         self.entry_excluir.delete(0, "end")
@@ -351,7 +434,7 @@ class App(ctk.CTk):
             ).grid(row=0, column=0, pady=40)
             return
 
-        for i, (nome, dose, horas) in enumerate(zip(remedios, dosagens, horarios)):
+        for i, (nome, dose, horas, endereco) in enumerate(zip(remedios, dosagens, horarios, enderecos)):
             card = ctk.CTkFrame(self.scroll, corner_radius=10,
                                 fg_color=("white", "#1e2330"),
                                 border_width=1,
@@ -390,6 +473,17 @@ class App(ctk.CTk):
                     padx=8, pady=2,
                     text_color=("gray30", "gray80")
                 ).grid(row=0, column=j, padx=(0, 4))
+
+            # Endereço da farmácia (via ViaCEP)
+            if endereco and endereco != "—":
+                ctk.CTkLabel(
+                    card, text=f"📍 {endereco}",
+                    font=ctk.CTkFont(size=11),
+                    text_color=("gray45", "gray65"),
+                    anchor="w",
+                    wraplength=380,
+                    justify="left"
+                ).grid(row=2, column=0, sticky="w", padx=12, pady=(0, 10))
 
     def _status(self, msg, erro=False):
         cor = ("#c0392b", "#e74c3c") if erro else ("gray40", "gray60")
