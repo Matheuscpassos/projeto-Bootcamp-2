@@ -6,8 +6,8 @@
 //   https://app.supabase.com → seu projeto → Settings → API
 // ============================================================================
 
-const SUPABASE_URL = 'SUA_SUPABASE_URL_AQUI';       // Ex: https://xxxxx.supabase.co
-const SUPABASE_ANON_KEY = 'SUA_SUPABASE_ANON_KEY_AQUI'; // Ex: eyJhbGciOi...
+const SUPABASE_URL = 'https://uftiflyoufinrarhovmd.supabase.co';       // Ex: https://xxxxx.supabase.co
+const SUPABASE_ANON_KEY = 'sb_publishable_2uaBHXRO0Gw1DRSLlAq15A_t_1_n_0G'; // Ex: eyJhbGciOi...
 
 // Inicializa o client Supabase (SDK carregado via CDN no index.html)
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
