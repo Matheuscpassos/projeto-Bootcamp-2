@@ -1,22 +1,74 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
-  <title>Consulta CEP</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gerenciador de Remédios</title>
+  <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
 
-  <h1>Buscar Endereço</h1>
+  <!-- ── Header ──────────────────────────────────────────────────────────── -->
+  <header class="header">
+    <span class="header-title">💊  Gerenciador de Remédios</span>
+    <button class="theme-toggle" id="themeToggle" title="Alternar tema">🌙</button>
+  </header>
 
-  <input type="text" id="cep" placeholder="Digite o CEP">
+  <!-- ── Main ────────────────────────────────────────────────────────────── -->
+  <main class="main">
 
-  <button onclick="buscarCEP()">
-    Buscar
-  </button>
+    <!-- Formulário (esquerda) -->
+    <section class="form-panel">
+      <h2>📋 Cadastrar Remédio</h2>
 
-  <div id="resultado"></div>
+      <form id="remedioForm" autocomplete="off">
+        <div class="form-group">
+          <label for="nome">Nome do remédio</label>
+          <input type="text" id="nome" placeholder="Ex: Paracetamol" />
+        </div>
 
-  <script src="script.js"></script>
+        <div class="form-group">
+          <label for="dosagem">Dosagem (mg)</label>
+          <input type="text" id="dosagem" placeholder="Ex: 500" />
+        </div>
+
+        <div class="form-group">
+          <label for="horarios">Horário(s) — HH:MM, separados por vírgula</label>
+          <input type="text" id="horarios" placeholder="Ex: 08:00, 14:00, 22:00" />
+        </div>
+
+        <div class="form-group">
+          <label for="cep">CEP da farmácia (opcional)</label>
+          <input type="text" id="cep" placeholder="Ex: 70040-010" />
+        </div>
+
+        <button type="submit" class="btn btn-primary">＋  Adicionar remédio</button>
+      </form>
+    </section>
+
+    <!-- Lista (direita) -->
+    <section class="list-panel">
+      <div class="list-header">
+        <h2>💊 Remédios Cadastrados</h2>
+        <span class="count-label" id="countLabel">0 remédios</span>
+      </div>
+      <div class="list-container" id="listContainer">
+        <div class="empty-state">
+          Nenhum remédio cadastrado.<br />
+          Use o formulário ao lado para adicionar.
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ── Status Bar ──────────────────────────────────────────────────────── -->
+  <footer class="status-bar" id="statusBar">Pronto.</footer>
+
+  <!-- ── Scripts ─────────────────────────────────────────────────────────── -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-client.js"></script>
+  <script src="app.js"></script>
 
 </body>
 </html>
